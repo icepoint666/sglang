@@ -888,6 +888,26 @@ class UnifiedRadixCache(BasePrefixCache):
 
     # ---- Evict Helpers ----
 
+    def _can_cascade_evict(
+        self,
+        node: UnifiedTreeNode,
+        trigger: TreeComponent,
+        target: EvictLayer = EvictLayer.DEVICE,
+    ) -> bool:
+        """Return whether cascading from trigger can evict peer components."""
+        is_leaf = len(node.children) == 0
+        trigger_priority = trigger.eviction_priority(is_leaf)
+
+        for comp in self._components_tuple:
+            if comp.eviction_priority(is_leaf) <= trigger_priority:
+                if comp is not trigger and comp.node_has_component_data(node, target):
+                    cd = node.component_data[comp.component_type]
+                    if EvictLayer.DEVICE in target and cd.lock_ref != 0:
+                        return False
+                    if EvictLayer.HOST in target and cd.host_lock_ref != 0:
+                        return False
+        return True
+
     def _cascade_evict(
         self,
         node: UnifiedTreeNode,

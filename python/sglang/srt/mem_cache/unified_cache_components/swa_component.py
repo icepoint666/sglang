@@ -338,12 +338,19 @@ class SWAComponent(TreeComponent):
                     x_next = lru.get_lru_no_lock()
                 x = x_next
             else:
-                # Internal: tombstone SWA + cascade
+                # Not an evictable leaf: preserve old swa_radix_cache semantics.
+                # SWA may be tombstoned independently while locked peers stay alive.
                 x_next = lru.get_prev_no_lock(x)
+                can_cascade = self.cache._can_cascade_evict(
+                    x, self, target=EvictLayer.DEVICE
+                )
                 self.cache._evict_component_and_detach_lru(
                     x, self, target=EvictLayer.DEVICE, tracker=tracker
                 )
-                self.cache._cascade_evict(x, self, tracker)
+                if can_cascade:
+                    self.cache._cascade_evict(x, self, tracker)
+                else:
+                    self.cache._update_evictable_leaf_sets(x)
                 x = x_next
 
     def acquire_component_lock(
