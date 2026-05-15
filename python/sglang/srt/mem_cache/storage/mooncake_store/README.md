@@ -289,6 +289,10 @@ You can enable it in any of the three supported configuration methods:
 
 > **Note:** `enable_ssd_offload` requires a Mooncake version that supports the `enable_ssd_offload` parameter in `MooncakeDistributedStore.setup()`. If the installed version does not support it, SGLang will automatically fall back to the old behavior and print a warning.
 
+**Replication (`replica_num`):**
+
+`replica_num` is optional and defaults to `1`. Configure `replica_num` in `--hicache-storage-backend-extra-config`, a JSON config file, or `MOONCAKE_REPLICA_NUM` to store multiple replicas of each KV cache object. This helps preserve cache hits when a storage node becomes unavailable, but it multiplies storage capacity usage and write traffic roughly by the replica count.
+
 **HiCache Related Parameters for SGLang Server**
 
 For a comprehensive overview of HiCache-related parameters, please refer to [this document](https://docs.sglang.io/advanced_features/hicache_design.html#related-parameters).

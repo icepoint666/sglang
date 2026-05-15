@@ -80,6 +80,13 @@ def _parse_global_segment_size(value) -> int:
     return int(value)
 
 
+def _parse_replica_num(value) -> int:
+    replica_num = int(value)
+    if replica_num < 1:
+        raise ValueError("Invalid replica_num: must be greater than or equal to 1")
+    return replica_num
+
+
 @dataclass
 class MooncakeStoreConfig:
     local_hostname: str
@@ -94,6 +101,7 @@ class MooncakeStoreConfig:
     client_server_address: str
     enable_ssd_offload: bool = False
     ssd_offload_path: Optional[str] = None
+    replica_num: int = 1
 
     @staticmethod
     def from_file() -> "MooncakeStoreConfig":
@@ -150,6 +158,9 @@ class MooncakeStoreConfig:
             ssd_offload_path=config.get(
                 "ssd_offload_path", envs.MOONCAKE_OFFLOAD_FILE_STORAGE_PATH.default
             ),
+            replica_num=_parse_replica_num(
+                config.get("replica_num", envs.MOONCAKE_REPLICA_NUM.default)
+            ),
         )
 
     @staticmethod
@@ -191,6 +202,7 @@ class MooncakeStoreConfig:
             client_server_address=envs.MOONCAKE_CLIENT.get(),
             enable_ssd_offload=envs.MOONCAKE_ENABLE_SSD_OFFLOAD.get(),
             ssd_offload_path=envs.MOONCAKE_OFFLOAD_FILE_STORAGE_PATH.get(),
+            replica_num=_parse_replica_num(envs.MOONCAKE_REPLICA_NUM.get()),
         )
 
     @staticmethod
@@ -238,6 +250,9 @@ class MooncakeStoreConfig:
             ),
             ssd_offload_path=extra_config.get(
                 "ssd_offload_path", envs.MOONCAKE_OFFLOAD_FILE_STORAGE_PATH.default
+            ),
+            replica_num=_parse_replica_num(
+                extra_config.get("replica_num", envs.MOONCAKE_REPLICA_NUM.default)
             ),
         )
 
@@ -428,6 +443,12 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                     f"Failed to setup Mooncake store, error code: {ret_code}"
                 )
             logger.info("Mooncake store setup successfully.")
+            self.replicate_config = None
+            if self.config.replica_num != 1:
+                from mooncake.store import ReplicateConfig
+
+                self.replicate_config = ReplicateConfig()
+                self.replicate_config.replica_num = self.config.replica_num
 
             self.local_rank = (
                 storage_config.tp_rank if storage_config is not None else 0
@@ -1020,7 +1041,11 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
     def _put_batch_zero_copy_impl(
         self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]
     ) -> List[int]:
-        return self.store.batch_put_from(key_strs, buffer_ptrs, buffer_sizes)
+        if self.replicate_config is None:
+            return self.store.batch_put_from(key_strs, buffer_ptrs, buffer_sizes)
+        return self.store.batch_put_from(
+            key_strs, buffer_ptrs, buffer_sizes, self.replicate_config
+        )
 
     def _get_batch_zero_copy_impl(
         self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]
