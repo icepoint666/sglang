@@ -40,7 +40,6 @@ from sglang.srt.distributed import (
     get_tensor_model_parallel_world_size,
 )
 from sglang.srt.layers.dp_attention import (
-    get_attention_dp_rank,
     get_attention_tp_rank,
     get_attention_tp_size,
     is_dp_attention_enabled,
@@ -264,11 +263,15 @@ class HiCacheController:
         model_name: Optional[str] = None,
         storage_backend_extra_config: Optional[dict] = None,
         enable_storage_metrics: bool = False,
+        dp_rank: int = 0,
+        dp_size: int = 1,
     ):
         self.tp_group = tp_group
         self.attn_cp_group = attn_cp_group
         self.attn_tp_group = attn_tp_group
         self.pp_group = pp_group
+        self.dp_rank = dp_rank
+        self.dp_size = dp_size
         self.prefetch_sync_groups: List[torch.distributed.ProcessGroup] = []
         self.mem_pool_device_allocator = token_to_kv_pool_allocator
         mem_pool_device = token_to_kv_pool_allocator.get_kvcache()
@@ -618,11 +621,9 @@ class HiCacheController:
         if is_dp_attention_enabled():
             self.tp_rank = get_attention_tp_rank()
             self.tp_size = get_attention_tp_size()
-            self.dp_rank = get_attention_dp_rank()
         else:
             self.tp_rank = get_tensor_model_parallel_rank()
             self.tp_size = get_tensor_model_parallel_world_size()
-            self.dp_rank = 0
 
         self.pp_rank = get_pipeline_model_parallel_rank()
         self.pp_size = get_pipeline_model_parallel_world_size()
@@ -665,6 +666,8 @@ class HiCacheController:
             enable_storage_metrics=self.enable_storage_metrics,
             is_page_first_layout=self.mem_pool_host.layout == "page_first",
             model_name=model_name,
+            dp_rank=self.dp_rank,
+            dp_size=self.dp_size,
             tp_lcm_size=tp_lcm_size,
             should_split_heads=should_split_heads,
             extra_config=storage_backend_extra_config,

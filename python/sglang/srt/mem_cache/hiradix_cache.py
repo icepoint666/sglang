@@ -154,6 +154,8 @@ class HiRadixCache(RadixCache):
                 model_name=server_args.served_model_name,
                 storage_backend_extra_config=extra_config,
                 enable_storage_metrics=self.enable_storage_metrics,
+                dp_rank=params.dp_rank,
+                dp_size=params.dp_size,
             )
         self._apply_storage_runtime_config(
             storage_backend=server_args.hicache_storage_backend,

@@ -384,10 +384,23 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                     device_config = json.loads(device_name)
                     if storage_config and hasattr(storage_config, "tp_rank"):
                         tp_rank = storage_config.tp_rank
+                        if hasattr(storage_config, "dp_rank") and hasattr(
+                            storage_config, "dp_size"
+                        ):
+                            rank = (
+                                (
+                                    storage_config.dp_rank * storage_config.pp_size
+                                    + storage_config.pp_rank
+                                )
+                                * storage_config.tp_size
+                                + storage_config.tp_rank
+                            )
+                        else:
+                            rank = tp_rank
                         # Try both integer and string keys since JSON parsing may convert keys
-                        device_name = device_config.get(tp_rank, "")
+                        device_name = device_config.get(rank, "")
                         if not device_name:
-                            device_name = device_config.get(str(tp_rank), "")
+                            device_name = device_config.get(str(rank), "")
                     else:
                         device_name = ""
                 except (json.JSONDecodeError, AttributeError):
